@@ -46,14 +46,20 @@ def list_items(db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search_items(q: str, db: Session = Depends(get_db)):
+    keywords = q.strip().split()
+
+    query = db.query(Item).filter(Item.quantity > 0)
+
+    for word in keywords:
+        query = query.filter(Item.name.ilike(f"%{word}%"))
+
     return (
-        db.query(Item)
-        .filter(
-            Item.name.ilike(f"%{q}%"),
-            Item.quantity > 0
-        )
+        query
+        .order_by(Item.name.asc())
+        .limit(20)
         .all()
     )
+
     
 @router.get("/low-stock")
 def low_stock_items(threshold: int = 5, db: Session = Depends(get_db)):

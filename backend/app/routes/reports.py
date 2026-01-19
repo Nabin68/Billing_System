@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import date
 from app.core.database import SessionLocal
 from app.models.sale import Sale
 import csv
 from fastapi.responses import StreamingResponse
+from datetime import datetime, date, time
+from fastapi import HTTPException
+import traceback
+from sqlalchemy import func
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -17,23 +20,26 @@ def get_db():
         db.close()
 
 
+
 @router.get("/today")
 def today_report(db: Session = Depends(get_db)):
-    today = date.today()
-
-    sales = db.query(Sale).filter(
-        Sale.created_at >= today
-    ).all()
-
-    total_bills = len(sales)
-    total_sales_amount = sum(s.final_amount for s in sales)
-    total_discount = sum(s.total_discount for s in sales)
+    sales = (
+        db.query(Sale)
+        .filter(func.date(Sale.created_at) == date.today())
+        .all()
+    )
 
     return {
-        "total_bills": total_bills,
-        "total_sales_amount": round(total_sales_amount, 2),
-        "total_discount": round(total_discount, 2),
+        "total_bills": len(sales),
+        "total_sales_amount": round(
+            sum((s.final_amount or 0) for s in sales), 2
+        ),
+        "total_discount": round(
+            sum((s.total_discount or 0) for s in sales), 2
+        ),
     }
+
+
 
 @router.get("/export/sales")
 def export_sales_csv(db: Session = Depends(get_db)):
