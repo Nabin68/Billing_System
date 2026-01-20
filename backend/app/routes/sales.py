@@ -21,14 +21,22 @@ def get_db():
     finally:
         db.close()
 
-
 @router.post("/")
 def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
+
+    # ------------------
+    # 🔒 Sale type validation (NEW)
+    # ------------------
+    if sale.sale_type not in ["normal", "manual", "random"]:
+        raise HTTPException(status_code=400, detail="Invalid sale_type")
+
     # ------------------
     # Customer handling
     # ------------------
     customer = None
-    if sale.customer_phone:
+
+    # Random sale → customer NOT required
+    if sale.sale_type != "random" and sale.customer_phone:
         customer = db.query(Customer).filter(
             Customer.phone == sale.customer_phone
         ).first()
@@ -36,36 +44,54 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
         if not customer:
             customer = Customer(
                 name=sale.customer_name or "Unknown",
-                phone=sale.customer_phone
+                phone=sale.customer_phone,
+                address=sale.customer_address,
             )
             db.add(customer)
             db.commit()
             db.refresh(customer)
+        else:
+            if sale.customer_address and not customer.address:
+                customer.address = sale.customer_address
+                db.commit()
 
     # ------------------
-    # Totals init (FIXED)
+    # Totals init
     # ------------------
     total_amount = 0
     total_discount = 0
 
     sale_record = Sale(
         customer_id=customer.id if customer else None,
+
         total_amount=0,
         total_discount=0,
         final_amount=0,
         rounded_final_amount=0,
+
         payment_mode=sale.payment_mode,
         amount_paid=sale.amount_paid or 0,
         due_amount=0,
-        is_manual=sale.is_manual,
+
+        sale_type=sale.sale_type,                    # ✅ NEW
+        manual_date=sale.manual_date                 # ✅ NEW (only meaningful for manual)
+        if sale.sale_type == "manual" else None,
+
+        is_manual=True if sale.sale_type == "manual" else False
     )
 
     db.add(sale_record)
     db.commit()
     db.refresh(sale_record)
 
+    # 🔧 FIX 4: Manual sale date must override created_at
+    if sale.sale_type == "manual" and sale.manual_date:
+        sale_record.created_at = sale.manual_date
+        db.commit()
+        db.refresh(sale_record)
+
     # ------------------
-    # Item loop (REPLACED)
+    # Item loop (STOCK ALWAYS REDUCED)
     # ------------------
     for s_item in sale.items:
         item = db.query(Item).filter(Item.id == s_item.item_id).first()
@@ -79,17 +105,25 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
                 detail=f"Not enough stock for {item.name}"
             )
 
-        line_total = item.selling_price * s_item.quantity
+        # 🔧 FIX 1: Use correct price per sale type
+        price = (
+            s_item.price
+            if sale.sale_type in ["manual", "random"]
+            else item.selling_price
+        )
+
+        line_total = price * s_item.quantity
         discount = (line_total * s_item.discount_percent) / 100
         final_price = line_total - discount
 
-        item.quantity -= s_item.quantity  # 🔥 stock goes down
+        # 🔻 STOCK REDUCTION (ALL SALE TYPES)
+        item.quantity -= s_item.quantity
 
         sale_item = SaleItem(
             sale_id=sale_record.id,
             item_id=item.id,
             quantity=s_item.quantity,
-            price=item.selling_price,
+            price=price,  # ✅ FIXED
             discount_percent=s_item.discount_percent,
             line_total=line_total,
             final_price=final_price,
@@ -101,7 +135,7 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
         db.add(sale_item)
 
     # ------------------
-    # Rounding & credit logic (STEP 3.8)
+    # Rounding & credit logic
     # ------------------
     final_amount = total_amount - total_discount
     rounded_final = round(final_amount, 2)
@@ -122,9 +156,11 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
     return {
         "message": "Sale completed",
         "bill_id": sale_record.id,
+        "sale_type": sale_record.sale_type,
         "final_amount": rounded_final,
         "due_amount": sale_record.due_amount
     }
+
 
 
 @router.post("/preview")
@@ -142,11 +178,16 @@ def preview_sale(sale: SaleCreate, db: Session = Depends(get_db)):
         if item.quantity < s_item.quantity:
             raise HTTPException(status_code=400, detail="Insufficient stock")
 
-        line_total, discount, final_price = calculate_final_price(
-            item.selling_price,
-            s_item.quantity,
-            s_item.discount_percent
+        # 🔧 FIX 2: Preview endpoint must respect price
+        price = (
+            s_item.price
+            if sale.sale_type in ["manual", "random"]
+            else item.selling_price
         )
+
+        line_total = price * s_item.quantity
+        discount = (line_total * s_item.discount_percent) / 100
+        final_price = line_total - discount
 
         total_amount += line_total
         total_discount += discount
@@ -154,7 +195,7 @@ def preview_sale(sale: SaleCreate, db: Session = Depends(get_db)):
         items_preview.append({
             "item_name": item.name,
             "quantity": s_item.quantity,
-            "price": item.selling_price,
+            "price": price,  # ✅ FIXED
             "discount_percent": s_item.discount_percent,
             "final_price": final_price
         })
@@ -174,17 +215,57 @@ def get_sale_details(sale_id: int, db: Session = Depends(get_db)):
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
 
-    items = (
-        db.query(SaleItem)
+    # Proper SQLAlchemy join to get items with product names
+    items_data = (
+        db.query(SaleItem, Item)
+        .join(Item, Item.id == SaleItem.item_id)
         .filter(SaleItem.sale_id == sale_id)
         .all()
     )
 
+    items = [
+        {
+            "item_id": si.item_id,
+            "item_name": item.name,   # ✅ IMPORTANT
+            "quantity": si.quantity,
+            "price": si.price,
+            "discount_percent": si.discount_percent,
+            "final_price": si.final_price,
+        }
+        for si, item in items_data
+    ]
+
+
     return {
-        "bill_id": sale.id,
-        "date": sale.created_at,
+        "id": sale.id,
+        "customer_name": sale.customer.name if sale.customer else None,
+        "customer_phone": sale.customer.phone if sale.customer else None,
+        "customer_address": sale.customer.address if sale.customer else None,
         "total_amount": sale.total_amount,
         "total_discount": sale.total_discount,
         "final_amount": sale.final_amount,
-        "items": items
+        "rounded_final_amount": sale.rounded_final_amount,
+        "amount_paid": sale.amount_paid,
+        "due_amount": sale.due_amount,
+        "created_at": sale.created_at,
+        "items": items,
     }
+
+# 🔧 FIX 3: Fix history routes (VERY IMPORTANT)
+@router.get("/history")
+def sales_history(db: Session = Depends(get_db)):
+    return (
+        db.query(Sale)
+        .filter(Sale.sale_type != "random")
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+
+@router.get("/random-history")
+def random_sales(db: Session = Depends(get_db)):
+    return (
+        db.query(Sale)
+        .filter(Sale.sale_type == "random")
+        .order_by(Sale.created_at.desc())
+        .all()
+    )

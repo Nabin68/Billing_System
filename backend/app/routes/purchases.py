@@ -1,15 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException  # type: ignore
+from sqlalchemy.orm import Session  # type: ignore
 
 from app.core.database import SessionLocal
-from app.models.item import Item
 from app.models.purchase import Purchase
+from app.models.purchase_item import PurchaseItem
+from app.models.item import Item
+from app.models.supplier import Supplier
 from app.schemas.purchase import PurchaseCreate
-from app.services.pricing import calculate_selling_price
-from app.services.stock import increase_stock
-from app.schemas.purchase_batch import PurchaseBatch
-from uuid import uuid4
-
 
 router = APIRouter(prefix="/purchases", tags=["Purchases"])
 
@@ -23,60 +20,152 @@ def get_db():
 
 
 @router.post("/")
-def create_purchase(purchase: PurchaseCreate, db: Session = Depends(get_db)):
-    item = db.query(Item).filter(Item.id == purchase.item_id).first()
+def create_purchase(data: PurchaseCreate, db: Session = Depends(get_db)):
 
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    # ---------- Supplier handling ----------
+    supplier = None
+    if data.supplier_phone:
+        supplier = db.query(Supplier).filter(
+            Supplier.phone == data.supplier_phone
+        ).first()
 
-    # Update item pricing & stock
-    item.cost_price = purchase.cost_price
-    item.margin_percent = purchase.margin_percent
-    item.selling_price = calculate_selling_price(
-        purchase.cost_price, purchase.margin_percent
+        if not supplier:
+            supplier = Supplier(
+                name=data.supplier_name or "Unknown",
+                phone=data.supplier_phone,
+                address=data.supplier_address
+            )
+            db.add(supplier)
+            db.commit()
+            db.refresh(supplier)
+
+    # ---------- Create Purchase ----------
+    purchase = Purchase(
+        supplier_id=supplier.id if supplier else None,
+        total_amount=0
     )
-    item.quantity = increase_stock(item.quantity, purchase.quantity)
 
-    db_purchase = Purchase(
-        item_id=purchase.item_id,
-        dealer_name=purchase.dealer_name,
-        quantity=purchase.quantity,
-        cost_price=purchase.cost_price,
-        margin_percent=purchase.margin_percent,
-    )
-
-    db.add(db_purchase)
+    db.add(purchase)
     db.commit()
+    db.refresh(purchase)
 
-    return {"message": "Purchase added and stock updated"}
+    total_amount = 0
 
+    # ---------- Process each item ----------
+    for p_item in data.items:
 
-@router.post("/batch")
-def create_purchase_batch(data: PurchaseBatch, db: Session = Depends(get_db)):
-    batch_id = str(uuid4())
+        # ⚠️ Margin must be present
+        if p_item.margin_percent is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"margin_percent is required for item '{p_item.item_name}'"
+            )
 
-    for item in data.items:
-        db_item = db.query(Item).filter(Item.id == item.item_id).first()
-
-        if not db_item:
-            continue
-
-        db_item.cost_price = item.cost_price
-        db_item.margin_percent = item.margin_percent
-        db_item.selling_price = calculate_selling_price(
-            item.cost_price, item.margin_percent
-        )
-        db_item.quantity += item.quantity
-
-        purchase = Purchase(
-            item_id=item.item_id,
-            dealer_name=data.dealer_name,
-            quantity=item.quantity,
-            cost_price=item.cost_price,
-            margin_percent=item.margin_percent,
+        # Calculate selling price (ONLY from cost + margin)
+        selling_price = p_item.cost_price + (
+            p_item.cost_price * p_item.margin_percent / 100
         )
 
-        db.add(purchase)
+        # Find item
+        item = db.query(Item).filter(Item.name == p_item.item_name).first()
 
+        if not item:
+            # ---------- Create new item ----------
+            item = Item(
+                name=p_item.item_name,
+                cost_price=p_item.cost_price,
+                margin_percent=p_item.margin_percent,   # ✅ REQUIRED
+                selling_price=selling_price,            # ✅ CALCULATED
+                quantity=p_item.quantity                # ✅ INITIAL STOCK
+            )
+            db.add(item)
+            db.commit()
+            db.refresh(item)
+        else:
+            # ---------- Update existing item ----------
+            item.cost_price = p_item.cost_price
+            item.margin_percent = p_item.margin_percent   # ✅ REQUIRED
+            item.selling_price = selling_price
+            item.quantity += p_item.quantity              # ✅ STOCK INCREASE
+
+        # Line total
+        line_total = p_item.quantity * p_item.cost_price
+        total_amount += line_total
+
+        # ---------- Create purchase item ----------
+        purchase_item = PurchaseItem(
+            purchase_id=purchase.id,
+            item_id=item.id,
+            quantity=p_item.quantity,
+            cost_price=p_item.cost_price,
+            margin_percent=p_item.margin_percent,
+            selling_price=selling_price,
+            line_total=line_total
+        )
+
+        db.add(purchase_item)
+
+    # ---------- Finalize purchase ----------
+    purchase.total_amount = total_amount
     db.commit()
-    return {"message": "Purchase batch saved"}
+
+    return {
+        "message": "Purchase recorded",
+        "purchase_id": purchase.id,
+        "total_amount": total_amount
+    }
+
+@router.get("/")
+def list_purchases(db: Session = Depends(get_db)):
+    purchases = (
+        db.query(Purchase)
+        .order_by(Purchase.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": p.id,
+            "supplier_name": p.supplier.name if p.supplier else None,
+            "supplier_phone": p.supplier.phone if p.supplier else None,
+            "total_amount": p.total_amount,
+            "created_at": p.created_at,
+        }
+        for p in purchases
+    ]
+
+@router.get("/{purchase_id}")
+def get_purchase_details(purchase_id: int, db: Session = Depends(get_db)):
+    purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
+
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Purchase not found")
+
+    items_data = (
+        db.query(PurchaseItem, Item)
+        .join(Item, Item.id == PurchaseItem.item_id)
+        .filter(PurchaseItem.purchase_id == purchase_id)
+        .all()
+    )
+
+    items = [
+        {
+            "item_name": item.name,          # ✅ REAL NAME
+            "quantity": pi.quantity,
+            "cost_price": pi.cost_price,
+            "margin_percent": pi.margin_percent,
+            "selling_price": pi.selling_price,
+            "line_total": pi.line_total,
+        }
+        for pi, item in items_data
+    ]
+
+    return {
+        "id": purchase.id,
+        "supplier_name": purchase.supplier.name if purchase.supplier else None,
+        "supplier_phone": purchase.supplier.phone if purchase.supplier else None,
+        "supplier_address": purchase.supplier.address if purchase.supplier else None,
+        "created_at": purchase.created_at,
+        "items": items,
+        "total_amount": purchase.total_amount,
+    }

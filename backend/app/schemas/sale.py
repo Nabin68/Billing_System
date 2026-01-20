@@ -1,18 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel # type: ignore
 from typing import List, Optional
+from datetime import datetime
 
 class SaleItemCreate(BaseModel):
     item_id: int
     quantity: int
-    discount_percent: float
+    price: float                     # ✅ REQUIRED
+    discount_percent: float = 0
+
 
 class SaleCreate(BaseModel):
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
 
-    payment_mode: str  # cash / online / credit
-    amount_paid: Optional[float] = 0
+    payment_mode: str
+    amount_paid: float = 0
 
-    is_manual: Optional[int] = 0
+    sale_type: str = "normal"        # normal | manual | random
+    manual_date: Optional[datetime] = None
 
     items: List[SaleItemCreate]
+
+

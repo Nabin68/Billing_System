@@ -2,11 +2,12 @@
 from fastapi import FastAPI # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from app.core.database import Base, engine
-from app.routes import items, purchases, sales, reports
+from app.routes import items, purchases, sales, reports,credits
 from fastapi.staticfiles import StaticFiles # type: ignore
 from fastapi.responses import FileResponse # type: ignore
 import os
-from app.routes import credits
+from app.routes import suppliers
+from app.routes import customers
 
 
 Base.metadata.create_all(bind=engine)
@@ -34,6 +35,11 @@ app.include_router(purchases.router)
 app.include_router(sales.router)
 app.include_router(reports.router)
 app.include_router(credits.router)
+app.include_router(customers.router)
+app.include_router(suppliers.router)
+
+
+
 
 @app.get("/")
 def serve_frontend():

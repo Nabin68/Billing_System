@@ -1,13 +1,24 @@
 import { searchItems } from "../api/api";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 
-function ItemSearchDropdown({ onSelect }) {
+const ItemSearchDropdown = forwardRef(({ onSelect, onEnterSelect }, ref) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [selected, setSelected] = useState(false);
   const inputRef = useRef(null);
 
+  // 🔥 expose focus() to parent
+  useImperativeHandle(ref, () => ({
+    focus() {
+      setSelected(false);
+      setQuery("");
+      inputRef.current?.focus();
+    }
+  }));
+
   useEffect(() => {
+    if (selected) return;
     if (query.length < 2) {
       setResults([]);
       return;
@@ -20,23 +31,26 @@ function ItemSearchDropdown({ onSelect }) {
     };
 
     load();
-  }, [query]);
+  }, [query, selected]);
 
   function handleKeyDown(e) {
+    if (selected) return;
+
     if (e.key === "ArrowDown") {
-      setActiveIndex((prev) =>
-        prev < results.length - 1 ? prev + 1 : prev
-      );
+      setActiveIndex(p => Math.min(p + 1, results.length - 1));
     }
 
     if (e.key === "ArrowUp") {
-      setActiveIndex((prev) => (prev > 0 ? prev - 1 : prev));
+      setActiveIndex(p => Math.max(p - 1, 0));
     }
 
     if (e.key === "Enter" && results[activeIndex]) {
-      onSelect(results[activeIndex]);
-      setQuery("");
+      const item = results[activeIndex];
+      setQuery(item.name);
+      setSelected(true);
       setResults([]);
+      onSelect(item);
+      onEnterSelect?.();
     }
   }
 
@@ -44,13 +58,19 @@ function ItemSearchDropdown({ onSelect }) {
     <div style={{ position: "relative" }}>
       <input
         ref={inputRef}
-        placeholder="Search product..."
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search product..."
+        className="w-full bg-white border border-gray-300 text-gray-900
+                   placeholder-gray-400 rounded px-3 py-2
+                   focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setSelected(false);
+        }}
         onKeyDown={handleKeyDown}
       />
 
-      {results.length > 0 && (
+      {!selected && results.length > 0 && (
         <div
           style={{
             position: "absolute",
@@ -65,19 +85,20 @@ function ItemSearchDropdown({ onSelect }) {
             zIndex: 99999,
           }}
         >
-          {results.map((item, idx) => (
+          {results.map((item, i) => (
             <div
               key={item.id}
               style={{
                 padding: 6,
                 cursor: "pointer",
-                background:
-                  idx === activeIndex ? "#333" : "transparent",
+                background: i === activeIndex ? "#333" : "transparent",
               }}
-              onClick={() => {
-                onSelect(item);
-                setQuery("");
+              onMouseDown={() => {
+                setQuery(item.name);
+                setSelected(true);
                 setResults([]);
+                onSelect(item);
+                onEnterSelect?.();
               }}
             >
               {item.name} – ₹{item.selling_price}
@@ -87,6 +108,6 @@ function ItemSearchDropdown({ onSelect }) {
       )}
     </div>
   );
-}
+});
 
 export default ItemSearchDropdown;

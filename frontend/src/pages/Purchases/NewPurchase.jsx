@@ -47,82 +47,144 @@ function NewPurchase() {
   }
 
   return (
-    <div>
-      <h2>New Purchase</h2>
+    // 🟢 Full width, no max-w (same as NewSale)
+    <div className="w-full min-h-full bg-white rounded shadow p-6 space-y-6">
+      <h2 className="text-xl font-semibold text-gray-800">
+        New Purchase
+      </h2>
 
-      <label>Dealer Name</label>
-      <br />
-      <input
-        value={dealer}
-        onChange={(e) => setDealer(e.target.value)}
-        placeholder="Dealer name"
-      />
+      {/* 🟢 DEALER SECTION — with background separation */}
+      <div className="bg-gray-50 border border-gray-200 rounded p-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Dealer Name
+        </label>
 
-      <h3>Products</h3>
+        <input
+          className="w-full bg-white border border-gray-300 text-gray-900
+                     placeholder-gray-400 rounded px-3 py-2
+                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Enter dealer name"
+          value={dealer}
+          onChange={(e) => setDealer(e.target.value)}
+        />
+      </div>
 
-      <table border="1" width="100%" cellPadding="6">
-        <thead>
-          <tr>
-            <th>Product ID</th>
-            <th>Qty</th>
-            <th>Cost Price</th>
-            <th>Margin %</th>
-          </tr>
-        </thead>
+      {/* 🟢 PRODUCTS SECTION — with background separation */}
+      <div className="bg-gray-50 border border-gray-200 rounded p-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">
+          Products
+        </h3>
 
-        <tbody>
-          {items.map((row, idx) => (
-            <tr key={idx}>
-              <td>
-                <input
-                  value={row.item_id}
-                  onChange={(e) =>
-                    updateItem(idx, "item_id", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={row.quantity}
-                  onChange={(e) =>
-                    updateItem(idx, "quantity", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={row.cost_price}
-                  onChange={(e) =>
-                    updateItem(idx, "cost_price", e.target.value)
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={row.margin_percent}
-                  onChange={(e) =>
-                    updateItem(idx, "margin_percent", e.target.value)
-                  }
-                />
-              </td>
-            </tr>
-          ))}
+        {/* 🟢 TABLE WRAPPER — fixes faded look */}
+        <div className="overflow-x-auto border border-gray-300 rounded">
+          <table className="w-full border-collapse bg-white">
+            <thead className="bg-gray-200 text-gray-900 text-sm font-semibold">
+              <tr>
+                <th className="px-4 py-3 text-left">
+                  Product ID
+                </th>
+                <th className="px-4 py-3 text-left">
+                  Qty
+                </th>
+                <th className="px-4 py-3 text-left">
+                  Cost Price
+                </th>
+                <th className="px-4 py-3 text-left">
+                  Margin %
+                </th>
+              </tr>
+            </thead>
 
-          {items.length === 0 && (
-            <tr>
-              <td colSpan="4">No products added</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+            <tbody className="text-sm">
+              {items.map((row, idx) => (
+                <tr
+                  key={idx}
+                  className="border-t border-gray-300 hover:bg-gray-50"
+                >
+                  <td className="px-4 py-2 text-gray-800">
+                    <input
+                      className="w-full bg-white border border-gray-300 text-gray-900
+                                 rounded px-2 py-1
+                                 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={row.item_id}
+                      onChange={(e) =>
+                        updateItem(idx, "item_id", e.target.value)
+                      }
+                    />
+                  </td>
 
-      <br />
-      <button onClick={addRow}>➕ Add Product</button>
-      <br /><br />
-      <button onClick={savePurchase}>💾 Save Purchase</button>
+                  <td className="px-4 py-2 text-gray-800">
+                    <input
+                      type="number"
+                      className="w-full bg-white border border-gray-300 text-gray-900
+                                 rounded px-2 py-1
+                                 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={row.quantity}
+                      onChange={(e) =>
+                        updateItem(idx, "quantity", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="px-4 py-2 text-gray-800">
+                    <input
+                      type="number"
+                      className="w-full bg-white border border-gray-300 text-gray-900
+                                 rounded px-2 py-1
+                                 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={row.cost_price}
+                      onChange={(e) =>
+                        updateItem(idx, "cost_price", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="px-4 py-2 text-gray-800">
+                    <input
+                      type="number"
+                      className="w-full bg-white border border-gray-300 text-gray-900
+                                 rounded px-2 py-1
+                                 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={row.margin_percent}
+                      onChange={(e) =>
+                        updateItem(idx, "margin_percent", e.target.value)
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+
+              {items.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    className="px-4 py-6 text-center text-gray-500"
+                  >
+                    No products added
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 🟢 ACTION BUTTONS */}
+      <div className="flex gap-4">
+        <button
+          onClick={addRow}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          ➕ Add Product
+        </button>
+
+        <button
+          onClick={savePurchase}
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+        >
+          💾 Save Purchase
+        </button>
+      </div>
     </div>
   );
 }

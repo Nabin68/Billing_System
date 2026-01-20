@@ -1,17 +1,21 @@
+import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
-import { Outlet } from "react-router-dom";
 
 function AppLayout() {
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    // 🔴 FORCE DARK TEXT ON LAYOUT WRAPPER
+    <div className="flex h-screen bg-gray-100 text-gray-900">
+      {/* Sidebar */}
       <Sidebar />
 
-      <div style={{ flex: 1 }}>
+      {/* Main Area */}
+      <div className="flex flex-col flex-1">
         <Topbar />
-        <div style={{ padding: 20 }}>
+
+        <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );

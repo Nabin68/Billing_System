@@ -14,13 +14,11 @@ def get_db():
         db.close()
 
 @router.get("/search")
-def search_customers(q: str, db: Session = Depends(get_db)):
+def search_customer(q: str, db: Session = Depends(get_db)):
     return (
         db.query(Customer)
-        .filter(
-            (Customer.name.ilike(f"%{q}%")) |
-            (Customer.phone.ilike(f"%{q}%"))
-        )
+        .filter(Customer.phone.ilike(f"%{q}%"))
+        .limit(10)
         .all()
     )
 
@@ -29,3 +27,7 @@ def customer_sales(customer_id: int, db: Session = Depends(get_db)):
     return db.query(Sale).filter(
         Sale.customer_id == customer_id
     ).all()
+
+@router.get("/by-phone")
+def get_customer_by_phone(phone: str, db: Session = Depends(get_db)):
+    return db.query(Customer).filter(Customer.phone == phone).first()

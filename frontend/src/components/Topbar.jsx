@@ -1,11 +1,14 @@
 function Topbar() {
   return (
-    <div style={{ borderBottom: "1px solid #ccc", padding: 10 }}>
-      <b>Bibek & Nabin Traders</b>
-      <span style={{ float: "right" }}>
+    <header className="h-14 bg-white border-b flex items-center justify-between px-6 shadow-sm">
+      <div className="text-sm text-gray-600">
+        Welcome 👋
+      </div>
+
+      <div className="text-sm text-gray-500">
         {new Date().toLocaleString()}
-      </span>
-    </div>
+      </div>
+    </header>
   );
 }
 

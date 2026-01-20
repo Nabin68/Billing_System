@@ -1,16 +1,18 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey # type: ignore
+from sqlalchemy.orm import relationship # type: ignore
 from datetime import datetime
+
 from app.core.database import Base
+
 
 class Purchase(Base):
     __tablename__ = "purchases"
 
-    id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False)
+    id = Column(Integer, primary_key=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
 
-    dealer_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    cost_price = Column(Float, nullable=False)
-    margin_percent = Column(Float, nullable=False)
-
+    total_amount = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    supplier = relationship("Supplier")
+    items = relationship("PurchaseItem", back_populates="purchase")
