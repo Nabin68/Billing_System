@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException # type: ignore
+from sqlalchemy.orm import Session # type: ignore
 
 from app.core.database import SessionLocal
 from app.models.item import Item
-from app.schemas.item import ItemCreate, ItemResponse
+from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.services.pricing import calculate_selling_price
+
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
@@ -40,9 +41,26 @@ def create_item(item: ItemCreate, db: Session = Depends(get_db)):
     return db_item
 
 
-@router.get("/", response_model=list[ItemResponse])
+@router.get("/")
 def list_items(db: Session = Depends(get_db)):
-    return db.query(Item).all()
+    items = (
+        db.query(Item)
+        .order_by(Item.name.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": i.id,
+            "name": i.name,
+            "quantity": i.quantity,
+            "cost_price": i.cost_price,
+            "margin_percent": i.margin_percent,
+            "selling_price": i.selling_price,
+        }
+        for i in items
+    ]
+
 
 @router.get("/search")
 def search_items(q: str, db: Session = Depends(get_db)):
@@ -78,4 +96,25 @@ def low_stock_items(threshold: int = 5, db: Session = Depends(get_db)):
         }
         for i in items
     ]
+
+@router.put("/{item_id}")
+def update_item(item_id: int, data: ItemUpdate, db: Session = Depends(get_db)):
+    item = db.query(Item).filter(Item.id == item_id).first()
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    item.name = data.name
+    item.quantity = data.quantity
+    item.cost_price = data.cost_price
+    item.margin_percent = data.margin_percent
+
+    # 🔒 Always calculate selling price on backend
+    item.selling_price = calculate_selling_price(
+        data.cost_price, data.margin_percent
+    )
+
+    db.commit()
+
+    return {"message": "Item updated successfully"}
 

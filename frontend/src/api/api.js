@@ -1,4 +1,6 @@
 //frontend/src/api/api.js
+import api from "./axios";
+
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -35,15 +37,6 @@ export async function getLowStockItems() {
   return res.json();
 }
 
-export async function createPurchaseBatch(data) {
-  const res = await fetch("http://127.0.0.1:8000/purchases/batch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-
-  return res.json();
-}
 
 export async function getCredits() {
   const res = await fetch("http://127.0.0.1:8000/credit");
@@ -72,5 +65,12 @@ export async function createRandomSale(payload) {
 
   return res.json();
 }
+export const searchSales = (q) =>
+  api.get(`/sales/search?q=${q}`).then(res => res.data);
 
+export const fetchCustomerSummary = () =>
+  api.get("/customers/summary"); // ✅ correct
+
+export const fetchCustomerDetails = (customerId) =>
+  api.get(`/customers/${customerId}/details`);
 

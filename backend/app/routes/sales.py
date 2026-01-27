@@ -8,6 +8,7 @@ from app.models.sale_item import SaleItem
 from app.schemas.sale import SaleCreate
 from app.services.billing import calculate_final_price
 from app.models.customer import Customer
+from app.services.credit_ledger import add_credit_entry
 from math import floor
 
 
@@ -153,6 +154,16 @@ def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
 
     db.commit()
 
+    # 🔥 CREDIT LEDGER INTEGRATION
+    if sale_record.due_amount > 0:
+        add_credit_entry(
+            db=db,
+            customer_id=sale_record.customer_id,
+            amount=sale_record.due_amount,
+            reference_type="sale",
+            reference_id=sale_record.id
+        )
+
     return {
         "message": "Sale completed",
         "bill_id": sale_record.id,
@@ -207,7 +218,51 @@ def preview_sale(sale: SaleCreate, db: Session = Depends(get_db)):
         "final_amount": total_amount - total_discount
     }
 
+@router.get("/history")
+def sales_history(db: Session = Depends(get_db)):
+    sales = (
+        db.query(Sale)
+        .filter(Sale.sale_type != "random")
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
 
+    return [
+        {
+            "id": s.id,
+            "created_at": s.created_at,
+            "sale_type": s.sale_type,
+            "customer_name": s.customer.name if s.customer else "Walk-in",
+            "customer_phone": s.customer.phone if s.customer else None,  # ✅ ADD
+            "payment_mode": s.payment_mode,
+            "rounded_final_amount": s.rounded_final_amount,
+        }
+        for s in sales
+    ]
+
+
+@router.get("/random-history")
+def random_sales(db: Session = Depends(get_db)):
+    sales = (
+        db.query(Sale)
+        .filter(Sale.sale_type == "random")
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": s.id,
+            "created_at": s.created_at,
+            "sale_type": "random",
+            "customer_name": "—",
+            "payment_mode": s.payment_mode,
+            "rounded_final_amount": s.rounded_final_amount,
+        }
+        for s in sales
+    ]
+
+    
 @router.get("/{sale_id}")
 def get_sale_details(sale_id: int, db: Session = Depends(get_db)):
     sale = db.query(Sale).filter(Sale.id == sale_id).first()
@@ -251,21 +306,28 @@ def get_sale_details(sale_id: int, db: Session = Depends(get_db)):
         "items": items,
     }
 
-# 🔧 FIX 3: Fix history routes (VERY IMPORTANT)
-@router.get("/history")
-def sales_history(db: Session = Depends(get_db)):
-    return (
+
+
+@router.get("/search")
+def search_sales(q: str, db: Session = Depends(get_db)):
+    sales = (
         db.query(Sale)
-        .filter(Sale.sale_type != "random")
+        .join(Customer, Sale.customer_id == Customer.id)
+        .filter(
+            (Customer.name.ilike(f"%{q}%")) |
+            (Customer.phone.ilike(f"%{q}%"))
+        )
         .order_by(Sale.created_at.desc())
+        .limit(10)
         .all()
     )
 
-@router.get("/random-history")
-def random_sales(db: Session = Depends(get_db)):
-    return (
-        db.query(Sale)
-        .filter(Sale.sale_type == "random")
-        .order_by(Sale.created_at.desc())
-        .all()
-    )
+    return [
+        {
+            "sale_id": s.id,
+            "customer_name": s.customer.name,
+            "customer_phone": s.customer.phone,
+            "amount": s.rounded_final_amount
+        }
+        for s in sales
+    ]

@@ -5,21 +5,20 @@ from datetime import datetime
 class SaleItemCreate(BaseModel):
     item_id: int
     quantity: int
-    price: float                     # ✅ REQUIRED
     discount_percent: float = 0
+    price: Optional[float] = None   # ✅ MUST BE OPTIONAL
 
 
 class SaleCreate(BaseModel):
+    sale_type: str = "normal"       # normal | manual | random
+
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     customer_address: Optional[str] = None
 
     payment_mode: str
-    amount_paid: float = 0
+    amount_paid: Optional[float] = 0  # ✅ OPTIONAL
 
-    sale_type: str = "normal"        # normal | manual | random
     manual_date: Optional[datetime] = None
 
     items: List[SaleItemCreate]
-
-

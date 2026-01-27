@@ -8,12 +8,15 @@ import Invoice from "./pages/Sales/Invoice";
 
 import NewPurchase from "./pages/Purchases/NewPurchase";
 import Products from "./pages/Products/Products";
-import CustomerDetails from "./pages/Customers/CustomerDetails";
+import CustomerDetails from "./pages/Customers/Customers";
 import CreditList from "./pages/Credit/CreditList";
 import PurchaseHistory from "./pages/Purchases/PurchaseHistory";
 import PurchaseInvoice from "./pages/Purchases/PurchaseInvoice";
 import RandomSale from "./pages/Sales/RandomSale";
 import ManualSaleEntry from "./pages/Sales/ManualSaleEntry";
+import SalesHistory from "./pages/sales/SalesHistory";
+import CustomerDetail from "./pages/Customers/CustomerDetail";
+
 
 
 function App() {
@@ -28,6 +31,8 @@ function App() {
         <Route path="/sales/manual" element={<ManualSale />} />
         <Route path="/sales/manual/random" element={<RandomSale />} />
         <Route path="/sales/manual/entry" element={<ManualSaleEntry />} />
+        <Route path="/sales/history" element={<SalesHistory />} />
+
 
 
         {/* Invoice */}
@@ -41,6 +46,8 @@ function App() {
         {/* Others */}
         <Route path="/products" element={<Products />} />
         <Route path="/customers" element={<CustomerDetails />} />
+        <Route path="/customers/:customerId" element={<CustomerDetail />} />
+
         <Route path="/credit" element={<CreditList />} />
       </Route>
     </Routes>

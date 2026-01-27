@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends # type: ignore
+from fastapi import APIRouter, Depends,HTTPException # type: ignore
 from sqlalchemy.orm import Session # type: ignore
 from app.core.database import SessionLocal
 from app.models.sale import Sale
 from app.models.customer import Customer
+from app.services.credit_ledger import add_debit_entry
 
 router = APIRouter(prefix="/credit", tags=["Credit"])
 
@@ -34,21 +35,16 @@ def credit_list(db: Session = Depends(get_db)):
         }
         for s, c in sales
     ]
+    
+@router.post("/pay/{customer_id}")
+def pay_credit(customer_id: int, amount: float, db: Session = Depends(get_db)):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
 
-@router.post("/pay/{sale_id}")
-def pay_credit(sale_id: int, amount: float, db: Session = Depends(get_db)):
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Invalid amount")
 
-    if not sale:
-        return {"error": "Sale not found"}
+    add_debit_entry(db, customer_id, amount)
 
-    sale.amount_paid += amount
-    sale.due_amount = max(
-        sale.rounded_final_amount - sale.amount_paid, 0
-    )
-
-    if sale.due_amount == 0:
-        sale.payment_mode = "paid"
-
-    db.commit()
-    return {"message": "Payment updated"}
+    return {"message": "Payment recorded"}

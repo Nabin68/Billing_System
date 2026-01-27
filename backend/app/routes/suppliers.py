@@ -11,31 +11,30 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-    finally:
+    finally:    
         db.close()
 
 
-# 🔍 Search supplier by phone (autocomplete)
 @router.get("/search")
-def search_supplier(phone: str = Query(..., min_length=3), db: Session = Depends(get_db)):
+def search_suppliers(
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db)
+):
     suppliers = (
         db.query(Supplier)
-        .filter(Supplier.phone.like(f"%{phone}%"))
-        .limit(5)
+        .filter(Supplier.name.ilike(f"%{q}%"))
+        .limit(10)
         .all()
     )
 
     return [
         {
-            "id": s.id,
             "name": s.name,
             "phone": s.phone,
-            "alt_phone": s.alt_phone,
             "address": s.address,
         }
         for s in suppliers
     ]
-
 
 # ➕ Create supplier (used during purchase submit)
 @router.post("/")
